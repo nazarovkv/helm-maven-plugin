@@ -77,6 +77,9 @@ public abstract class AbstractHelmMojo extends AbstractMojo {
 	@Parameter(property = "helm.downloadUrl")
 	private String helmDownloadUrl;
 
+	@Parameter(property = "helm.downloadAuthServer")
+	private String helmDownloadAuthServer;
+
 	@Parameter(property = "helm.version", defaultValue = "3.2.0")
 	private String helmVersion;
 
@@ -461,5 +464,13 @@ public abstract class AbstractHelmMojo extends AbstractMojo {
 
 	public void setAutoDetectLocalHelmBinary(final boolean autoDetectLocalHelmBinary) {
 		this.autoDetectLocalHelmBinary = autoDetectLocalHelmBinary;
+	}
+
+	public String getHelmDownloadAuthServer() {
+		return helmDownloadAuthServer;
+	}
+
+	public void setHelmDownloadAuthServer(String helmDownloadAuthServer) {
+		this.helmDownloadAuthServer = helmDownloadAuthServer;
 	}
 }

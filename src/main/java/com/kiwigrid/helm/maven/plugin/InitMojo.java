@@ -4,8 +4,8 @@ import java.io.BufferedInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.PasswordAuthentication;
-import java.net.URL;
+import java.net.*;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
+import lombok.SneakyThrows;
 import org.apache.commons.compress.archivers.ArchiveEntry;
 import org.apache.commons.compress.archivers.ArchiveException;
 import org.apache.commons.compress.archivers.ArchiveInputStream;
@@ -33,6 +34,8 @@ import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
+import org.apache.maven.settings.Server;
+import org.codehaus.plexus.util.Base64;
 import org.codehaus.plexus.util.Os;
 import org.codehaus.plexus.util.StringUtils;
 
@@ -53,6 +56,7 @@ public class InitMojo extends AbstractHelmMojo {
 	@Parameter(property = "helm.init.add-default-repo", defaultValue = "true")
 	private boolean addDefaultRepo;
 
+	@SneakyThrows
 	public void execute() throws MojoExecutionException {
 
 		if (skip || skipInit) {
@@ -113,7 +117,7 @@ public class InitMojo extends AbstractHelmMojo {
 		}
 	}
 
-	protected void downloadAndUnpackHelm() throws MojoExecutionException {
+	protected void downloadAndUnpackHelm() throws MojoExecutionException, IOException {
 
 		Path directory = Paths.get(getHelmExecutableDirectory());
 		if (Files.exists(directory.resolve(SystemUtils.IS_OS_WINDOWS ? "helm.exe" : "helm"))) {
@@ -131,7 +135,19 @@ public class InitMojo extends AbstractHelmMojo {
 
 		getLog().debug("Downloading Helm: " + url);
 		boolean found = false;
-		try (InputStream dis = new URL(url).openStream();
+		URL downloadUrl = new URL(url);
+		HttpURLConnection urlConnection = (HttpURLConnection) downloadUrl.openConnection();
+
+		if(StringUtils.isNotEmpty(getHelmDownloadAuthServer())) {
+			Server server = getSettings().getServer(getHelmDownloadAuthServer());
+			if(server != null) {
+				String userpass = server.getUsername() + ":" + server.getPassword();
+				urlConnection.setRequestProperty(
+						"Authorization",
+						"Basic " + new String(Base64.encodeBase64(userpass.getBytes(StandardCharsets.UTF_8))));
+			}
+		}
+		try (InputStream dis = urlConnection.getInputStream();
 			 InputStream cis = createCompressorInputStream(dis);
 			 ArchiveInputStream is = createArchiverInputStream(cis)) {
 
