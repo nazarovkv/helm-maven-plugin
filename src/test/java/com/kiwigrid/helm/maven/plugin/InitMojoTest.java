@@ -312,6 +312,10 @@ public class InitMojoTest {
 	}
 
 	@Nested
+	@ExtendWith({ SystemPropertyExtension.class, MojoExtension.class })
+	@MojoProperty(name = "helmDownloadUrl", value = "https://get.helm.sh/helm-v3.0.0-linux-amd64.tar.gz")
+	@MojoProperty(name = "chartDirectory", value = "junit-helm")
+	@MojoProperty(name = "chartVersion", value = "0.0.1")
 	class RepositoryLookups {
 
 		private String getSettingsXmlFolder(String fileName) {
