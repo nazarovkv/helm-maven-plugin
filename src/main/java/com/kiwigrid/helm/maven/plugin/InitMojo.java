@@ -123,7 +123,7 @@ public class InitMojo extends AbstractHelmMojo {
 	}
 
 	private Repository lookupRepository(String repoId) {
-        Repository activeRepo = getSettings().getProfiles()
+		return getSettings().getProfiles()
                 //Find all active profiles
                 .stream().filter(p -> getSettings().getActiveProfiles().contains(p.getId())).collect(Collectors.toList())
                 //Find all repos inside profile
@@ -131,7 +131,6 @@ public class InitMojo extends AbstractHelmMojo {
                 //Lookup by repo id
                 .stream().filter(r -> r.getId().equals(repoId) ).collect(Collectors.toList())
                 .stream().findFirst().orElse(new Repository());
-        return activeRepo;
 	}
 
     private HelmRepository toHelmRepository(Repository repo){

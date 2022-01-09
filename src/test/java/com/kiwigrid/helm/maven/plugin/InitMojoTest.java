@@ -1,13 +1,11 @@
 package com.kiwigrid.helm.maven.plugin;
 
-import java.io.File;
+import java.io.*;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.List;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 import com.kiwigrid.helm.maven.plugin.junit.MojoExtension;
@@ -16,8 +14,14 @@ import com.kiwigrid.helm.maven.plugin.junit.SystemPropertyExtension;
 import com.kiwigrid.helm.maven.plugin.pojo.HelmRepository;
 import com.kiwigrid.helm.maven.plugin.pojo.RepoType;
 import org.apache.maven.plugin.MojoExecutionException;
+import org.apache.maven.settings.Profile;
+import org.apache.maven.settings.Repository;
+import org.apache.maven.settings.Settings;
+import org.apache.maven.settings.io.xpp3.SettingsXpp3Reader;
 import org.codehaus.plexus.util.Os;
+import org.codehaus.plexus.util.xml.pull.XmlPullParserException;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
@@ -305,6 +309,56 @@ public class InitMojoTest {
 
 		assertEquals(1, helmCommands.size(), "Expected 1 helm command");
 		assertTrue(helmCommands.contains("repo add my-artifactory-stable https://somwhere.com/repo/stable"), "Adding upload stable repo expected");
+	}
+
+	@Nested
+	class RepositoryLookups {
+
+		private String getSettingsXmlFolder(String fileName) {
+
+			ClassLoader classLoader = getClass().getClassLoader();
+			File pathToSettingsXml = new File( classLoader.getResource("settings-xml").getPath() );
+			return pathToSettingsXml.getAbsolutePath() + "/" + fileName;
+		}
+
+		private Settings getSettings() throws IOException, XmlPullParserException {
+			SettingsXpp3Reader settingsXmlReader = new SettingsXpp3Reader();
+			File settingsXmlFile = new File(getSettingsXmlFolder("settings.xml"));
+			InputStream settingsXmlIS = new FileInputStream(settingsXmlFile);
+			return settingsXmlReader.read(settingsXmlIS);
+		}
+
+		@Test
+		void verifyAddingUploadStableRepoSnapshotNotPresent(InitMojo mojo) throws Exception {
+
+			// prepare execution
+			final HelmRepository helmUploadStableRepo = new HelmRepository();
+			helmUploadStableRepo.setType(RepoType.ARTIFACTORY);
+			helmUploadStableRepo.setName("repo-name-matching-setting-xml-repo-id");
+
+
+			doReturn(getSettings()).when(mojo).getSettings();
+
+			mojo.setUploadRepoStable(helmUploadStableRepo);
+			ArgumentCaptor<String> helmCommandCaptor = ArgumentCaptor.forClass(String.class);
+			doNothing().when(mojo).callCli(helmCommandCaptor.capture(), anyString(), anyBoolean());
+			mojo.setHelmDownloadUrl(getOsSpecificDownloadURL());
+			mojo.setAddDefaultRepo(false);
+			mojo.setAddUploadRepos(true);
+
+			// run init
+			mojo.execute();
+
+			// check captured commands
+			Set<String> helmCommands = helmCommandCaptor.getAllValues()
+					.stream()
+					.filter(cmd -> cmd.contains(Os.OS_FAMILY == Os.FAMILY_WINDOWS ? "helm.exe repo" : "helm repo"))
+					.map(cmd -> cmd.substring(cmd.indexOf("repo add"))) //remove everything before repo add for easier verification
+					.collect(Collectors.toSet());
+
+			assertEquals(1, helmCommands.size(), "Expected 1 helm command");
+			assertTrue(helmCommands.contains("repo add my-artifactory-stable https://somwhere.com/repo/stable"), "Adding upload stable repo expected");
+		}
 	}
 
 	@Test
