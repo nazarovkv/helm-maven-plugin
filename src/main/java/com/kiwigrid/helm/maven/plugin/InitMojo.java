@@ -20,6 +20,7 @@ import java.nio.file.attribute.UserPrincipal;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.apache.commons.compress.archivers.ArchiveEntry;
 import org.apache.commons.compress.archivers.ArchiveException;
@@ -33,6 +34,7 @@ import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
+import org.apache.maven.settings.*;
 import org.codehaus.plexus.util.Os;
 import org.codehaus.plexus.util.StringUtils;
 
@@ -92,21 +94,51 @@ public class InitMojo extends AbstractHelmMojo {
 
 		if (addUploadRepos) {
 			if (getUploadRepoStable() != null) {
-				addRepository(getUploadRepoStable());
+				if(StringUtils.isBlank(getUploadRepoStable().getUrl())){
+					addRepository(toHelmRepository(lookupRepository(getUploadRepoStable().getName())));
+				} else {
+					addRepository(getUploadRepoStable());
+				}
 			}
 
 			//add the upload snapshot repo only if it's name differs to the upload repo stable name
 			if (getUploadRepoSnapshot() != null && (getUploadRepoStable()==null || !getUploadRepoStable().getName().equals(getUploadRepoSnapshot().getName()))) {
-				addRepository(getUploadRepoSnapshot());
+				if(StringUtils.isBlank(getUploadRepoSnapshot().getUrl())){
+					addRepository(toHelmRepository(lookupRepository(getUploadRepoSnapshot().getName())));
+				} else {
+					addRepository(getUploadRepoSnapshot());
+				}
 			}
 		}
 
 		if (getHelmExtraRepos() != null) {
 			for (HelmRepository repository : getHelmExtraRepos()) {
-				addRepository(repository);
+				if(StringUtils.isBlank(repository.getUrl())){
+					addRepository(toHelmRepository(lookupRepository(repository.getName())));
+				} else {
+					addRepository(repository);
+				}
 			}
 		}
 	}
+
+	private Repository lookupRepository(String repoId) {
+        Repository activeRepo = getSettings().getProfiles()
+                //Find all active profiles
+                .stream().filter(p -> getSettings().getActiveProfiles().contains(p.getId())).collect(Collectors.toList())
+                //Find all repos inside profile
+                .stream().map(Profile::getRepositories).flatMap(List::stream).collect(Collectors.toList())
+                //Lookup by repo id
+                .stream().filter(r -> r.getId().equals(repoId) ).collect(Collectors.toList())
+                .stream().findFirst().orElse(new Repository());
+        return activeRepo;
+	}
+
+    private HelmRepository toHelmRepository(Repository repo){
+        HelmRepository helmRepo = new HelmRepository();
+        helmRepo.setUrl(repo.getUrl());
+        return helmRepo;
+    }
 
 	/**
 	 * Adds the helm repository to the helm, with repo authentication
@@ -188,7 +220,7 @@ public class InitMojo extends AbstractHelmMojo {
 
 		} catch (IOException e) {
 			throw new MojoExecutionException("Unable to download and extract helm executable.", e);
-		} 
+		}
 
 		if (!found) {
 			throw new MojoExecutionException("Unable to find helm executable in tar file.");
